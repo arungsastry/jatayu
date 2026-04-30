@@ -806,10 +806,16 @@ function poll(): void {
     process.stderr.write(`imessage channel: poll query failed: ${err}\n`)
     return
   }
+  // Drop messages from chats we don't talk to before they reach handleInbound.
+  // Pairing mode is the one exception: new DMs (style 45) must still surface
+  // so the gate can issue a pairing code.
+  const allowed = allowedChatGuids()
+  const includeNewDMs = loadAccess().dmPolicy === 'pairing'
   const now = Date.now()
   for (const [k, t] of deliveredContent) if (now - t > 5000) deliveredContent.delete(k)
   for (const r of rows) {
     watermark = r.rowid
+    if (!allowed.has(r.chat_guid) && !(includeNewDMs && r.chat_style === 45)) continue
     if (deliveredGuids.has(r.guid)) continue
     deliveredGuids.add(r.guid)
     const contentKey = `${r.handle_id ?? ''}\x00${(r.text ?? '').slice(0, 120)}\x00${r.date}`
